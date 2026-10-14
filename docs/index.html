@@ -154,8 +154,6 @@ body.calm .top{opacity:0;pointer-events:none}
 <div class="toast" id="toast"></div>
 <div id="sheet" hidden><div class="panel" role="dialog" aria-label="Sumber film">
   <h3>SUMBER FILM</h3>
-  <div class="opt" data-src="mix"><div><strong>Campuran · film baru</strong><span>YouTube dan Dailymotion digabung. Pilihan paling banyak.</span></div></div>
-  <div class="opt" data-src="dm"><div><strong>Dailymotion · film baru</strong><span>Film lengkap dari Dailymotion, diputar di dalam aplikasi. Tanpa kuota.</span></div></div>
   <div class="opt" data-src="yt"><div><strong>YouTube · film baru</strong><span>Film lengkap terbaru dari YouTube, diputar di dalam aplikasi. Siap dipakai, tanpa pengaturan.</span></div></div>
   <input id="ytkey" type="text" autocomplete="off" spellcheck="false" placeholder="API key sendiri (opsional)">
   <p class="hint">Kosongkan kolom kunci untuk memakai kunci bawaan. Durasi minimal 45 menit, dirilis 2015 ke atas.</p>
@@ -188,7 +186,7 @@ const seen=new Set(store.get('bf_seen',[])),liked=new Set(store.get('bf_liked',[
 let genre=0,queue=[],page=1,ytPage='',loading=false,muted=false,current=null,token=0;
 // Kunci bawaan Boye Film: dibatasi ke YouTube Data API dan situs amonkshark.github.io
 const BUILTIN_KEY='AIzaSyAzN91o1a2kOeZUNLOAGv4SSWxV11gon1k';
-let SRC=store.get('bf_src','mix'),KEY=store.get('bf_key','')||BUILTIN_KEY;if(!['mix','yt','dm'].includes(SRC))SRC='mix';
+let SRC='yt',KEY=store.get('bf_key','')||BUILTIN_KEY;
 const YTQ=[
   ['action full movie','martial arts action full movie','war action full movie','fantasy action full movie'],
   ['kung fu full movie','martial arts full movie english'],
@@ -259,14 +257,14 @@ function srcLabel(){$('#srcLbl').textContent={yt:'YOUTUBE',dm:'DAILYMOTION',mix:
 srcLabel();
 let pick=SRC;
 function openSheet(){pick=SRC;$('#ytkey').value=KEY;markOpt();$('#sheet').hidden=false}
-function markOpt(){document.querySelectorAll('.opt').forEach(o=>o.classList.toggle('on',o.dataset.src===pick));$('#ytkey').hidden=!(pick==='yt'||pick==='mix')}
+function markOpt(){document.querySelectorAll('.opt').forEach(o=>o.classList.toggle('on',o.dataset.src===pick));$('#ytkey').hidden=false}
 document.querySelectorAll('.opt').forEach(o=>o.onclick=()=>{pick=o.dataset.src;markOpt()});
 $('#gear').onclick=openSheet;
 $('#sheetCancel').onclick=()=>$('#sheet').hidden=true;
 $('#sheet').onclick=e=>{if(e.target.id==='sheet')$('#sheet').hidden=true};
 $('#sheetSave').onclick=()=>{
   const k=$('#ytkey').value.trim();
-  store.set('bf_key',k);KEY=k||BUILTIN_KEY;SRC=pick;store.set('bf_src',SRC);srcLabel();$('#sheet').hidden=true;reset();
+  store.set('bf_key',k);KEY=k||BUILTIN_KEY;SRC='yt';store.set('bf_src',SRC);srcLabel();$('#sheet').hidden=true;reset();
 };
 
 /* Chips */
@@ -313,7 +311,7 @@ async function fetchYT(){
   const ids=items.map(i=>i.id.videoId).join(',');
   const d=await (await fetch('https://www.googleapis.com/youtube/v3/videos?part=contentDetails,status&id='+ids+'&key='+encodeURIComponent(KEY))).json();
   const len={};(d.items||[]).forEach(v=>{if(v.status&&v.status.embeddable!==false)len[v.id]=isoDur(v.contentDetails.duration)});
-  return items.filter(i=>len[i.id.videoId]>=45*60&&!/trailer|teaser|review|recap|explained|reaction|clip/i.test(i.snippet.title))
+  return items.filter(i=>len[i.id.videoId]>=45*60&&!/trailer|teaser|review|recap|explained|reaction|clip|game|gameplay|walkthrough|cutscene|playthrough|ps5|xbox|fan ?made|edit|summary|ringkasan|alur cerita/i.test(i.snippet.title))
     .map(i=>({id:i.id.videoId,title:i.snippet.title,year:(i.snippet.publishedAt||'').slice(0,4),desc:i.snippet.description,
       subs:q+' '+i.snippet.title,img:(i.snippet.thumbnails.high||i.snippet.thumbnails.default).url,channel:i.snippet.channelTitle,yt:1,len:len[i.id.videoId]}))
     .sort(()=>Math.random()-.5);
@@ -337,7 +335,7 @@ async function fetchMix(){
   const a=out.filter(x=>x.yt),b=out.filter(x=>x.dm),r=[];while(a.length||b.length){if(a.length)r.push(a.shift());if(b.length)r.push(b.shift())}
   return r;
 }
-const fetchBatch=()=>SRC==='yt'?fetchYT():SRC==='dm'?fetchDM():fetchMix();
+const fetchBatch=()=>fetchYT();
 const videoFor=doc=>doc.yt?Promise.resolve({yt:doc.id,len:doc.len}):doc.dm?Promise.resolve({dm:doc.vid,len:doc.len}):arcVideo(doc.id);
 
 const clean=t=>{const d=document.createElement('div');d.innerHTML=Array.isArray(t)?t[0]:(t||'');return d.textContent.replace(/\s+/g,' ').trim()};
@@ -462,8 +460,7 @@ async function more(){
     if(!feed.querySelector('.slide'))emptyMsg('Belum ada film untuk genre ini. Coba genre lain.');
   }catch(e){
     $('#splash').classList.add('gone');
-    if(SRC==='yt'&&/Kuota|key/.test(e&&e.message||'')){toast('Kuota YouTube habis, pindah ke Dailymotion');SRC='dm';srcLabel();loading=false;return reset()}
-    if(!feed.querySelector('.slide'))emptyMsg(e&&e.message&&!/fetch/i.test(e.message)?e.message:'Tidak bisa memuat film. Periksa koneksi internet lalu buka ulang aplikasi.');
+        if(!feed.querySelector('.slide'))emptyMsg(e&&e.message&&!/fetch/i.test(e.message)?e.message:'Tidak bisa memuat film. Periksa koneksi internet lalu buka ulang aplikasi.');
     else toast(e.message||'Gagal memuat');
   }finally{if(my===token)loading=false}
 }
