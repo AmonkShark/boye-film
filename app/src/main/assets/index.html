@@ -148,10 +148,10 @@ body.calm .top{opacity:0;pointer-events:none}
 <div class="toast" id="toast"></div>
 <div id="sheet" hidden><div class="panel" role="dialog" aria-label="Sumber film">
   <h3>SUMBER FILM</h3>
-  <div class="opt" data-src="yt"><div><strong>YouTube · film baru</strong><span>Film lengkap terbaru dari YouTube, diputar di dalam aplikasi. Perlu YouTube API key gratis.</span></div></div>
+  <div class="opt" data-src="yt"><div><strong>YouTube · film baru</strong><span>Film lengkap terbaru dari YouTube, diputar di dalam aplikasi. Siap dipakai, tanpa pengaturan.</span></div></div>
   <div class="opt" data-src="arc"><div><strong>Arsip · film klasik</strong><span>Film lama domain publik dari Internet Archive. Tanpa pengaturan.</span></div></div>
-  <input id="ytkey" type="text" autocomplete="off" spellcheck="false" placeholder="Tempel YouTube API key di sini">
-  <p class="hint">Kunci hanya disimpan di HP ini. Durasi minimal 45 menit, dirilis 2015 ke atas.</p>
+  <input id="ytkey" type="text" autocomplete="off" spellcheck="false" placeholder="API key sendiri (opsional)">
+  <p class="hint">Kosongkan kolom kunci untuk memakai kunci bawaan. Durasi minimal 45 menit, dirilis 2015 ke atas.</p>
   <div class="row"><button class="btn-ghost" id="sheetCancel">Batal</button><button class="btn-main" id="sheetSave">Simpan</button></div>
 </div></div>
 
@@ -178,8 +178,9 @@ const feed=$('#feed');
 const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(_){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(_){}}};
 const seen=new Set(store.get('bf_seen',[])),liked=new Set(store.get('bf_liked',[]));
 let genre=0,queue=[],page=1,ytPage='',loading=false,muted=false,current=null,token=0;
-let SRC=store.get('bf_src',''),KEY=store.get('bf_key','');
-if(SRC==='yt'&&!KEY)SRC='arc';if(!SRC)SRC=KEY?'yt':'arc';
+// Kunci bawaan Boye Film: dibatasi ke YouTube Data API dan situs amonkshark.github.io
+const BUILTIN_KEY='AIzaSyAzN91o1a2kOeZUNLOAGv4SSWxV11gon1k';
+let SRC=store.get('bf_src','yt'),KEY=store.get('bf_key','')||BUILTIN_KEY;
 const YTQ=[
   ['action full movie','martial arts action full movie','war action full movie','fantasy action full movie'],
   ['kung fu full movie','martial arts full movie english'],
@@ -228,8 +229,7 @@ $('#sheetCancel').onclick=()=>$('#sheet').hidden=true;
 $('#sheet').onclick=e=>{if(e.target.id==='sheet')$('#sheet').hidden=true};
 $('#sheetSave').onclick=()=>{
   const k=$('#ytkey').value.trim();
-  if(pick==='yt'&&!k){toast('Tempel API key dulu');return}
-  KEY=k;store.set('bf_key',KEY);SRC=pick;store.set('bf_src',SRC);srcLabel();$('#sheet').hidden=true;reset();
+  store.set('bf_key',k);KEY=k||BUILTIN_KEY;SRC=pick;store.set('bf_src',SRC);srcLabel();$('#sheet').hidden=true;reset();
 };
 
 /* Chips */
@@ -400,11 +400,11 @@ async function more(){
     if(!feed.querySelector('.slide'))emptyMsg('Belum ada film untuk genre ini. Coba genre lain.');
   }catch(e){
     $('#splash').classList.add('gone');
+    if(SRC==='yt'&&/Kuota/.test(e&&e.message||'')){toast('Kuota YouTube habis, pindah ke Klasik');SRC='arc';srcLabel();loading=false;return reset()}
     if(!feed.querySelector('.slide'))emptyMsg(e&&e.message&&!/fetch/i.test(e.message)?e.message:'Tidak bisa memuat film. Periksa koneksi internet lalu buka ulang aplikasi.');
     else toast(e.message||'Gagal memuat');
   }finally{if(my===token)loading=false}
 }
-if(SRC==='arc'&&!store.get('bf_asked',false)){store.set('bf_asked',true);setTimeout(openSheet,900)}
 more();
 </script>
 </body>
