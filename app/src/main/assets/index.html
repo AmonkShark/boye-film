@@ -158,10 +158,10 @@ function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');cl
 
 /* Data */
 async function fetchBatch(){
-  const q='collection:(feature_films) AND mediatype:(movies) AND '+GENRES[genre][1];
+  const q='collection:(feature_films) AND mediatype:(movies) AND '+GENRES[genre][1]+' AND NOT subject:(documentary OR documentaries OR training OR newsreel OR propaganda OR educational OR holocaust OR "concentration camp")';
   const url='https://archive.org/advancedsearch.php?q='+encodeURIComponent(q)+'&fl[]=identifier&fl[]=title&fl[]=year&fl[]=description&fl[]=subject&rows=24&page='+(page++)+'&output=json&sort[]=downloads+desc';
   const j=await (await fetch(url)).json();
-  return j.response.docs.filter(d=>!seen.has(d.identifier)).sort(()=>Math.random()-.5);
+  return j.response.docs.filter(d=>!seen.has(d.identifier)&&!/documentar|training|marksmanship|newsreel|concentration camp|instruction/i.test(clean(d.title)+' '+[].concat(d.subject||[]).join(' '))).sort(()=>Math.random()-.5);
 }
 async function videoFor(id){
   const j=await (await fetch('https://archive.org/metadata/'+id)).json();

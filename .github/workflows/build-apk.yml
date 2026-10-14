@@ -1,5 +1,7 @@
 name: Build APK Boye Film
 on: [push, workflow_dispatch]
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -10,7 +12,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v3
         with: { gradle-version: '8.7' }
       - run: gradle :app:assembleRelease --no-daemon
+      - run: cp app/build/outputs/apk/release/*.apk BoyeFilm.apk
       - uses: actions/upload-artifact@v4
+        with: { name: BoyeFilm-apk, path: BoyeFilm.apk }
+      - uses: softprops/action-gh-release@v2
         with:
-          name: BoyeFilm-apk
-          path: app/build/outputs/apk/release/*.apk
+          tag_name: v1.0.${{ github.run_number }}
+          name: Boye Film v1.0.${{ github.run_number }}
+          files: BoyeFilm.apk
+          make_latest: true
