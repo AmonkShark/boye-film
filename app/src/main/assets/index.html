@@ -382,7 +382,7 @@ function makeSlide(doc,v){
   vid.addEventListener('playing',()=>{spin.hidden=true;setIcon(true);center.hidden=false;calm(s)});
   vid.addEventListener('pause',()=>{setIcon(false);center.hidden=false;spin.hidden=true;wake(s,false)});
   vid.addEventListener('timeupdate',()=>{const d=vid.duration||v.len;fill.style.width=(vid.currentTime/d*100)+'%';time.textContent=fmt(vid.currentTime)+' / '+fmt(d)});
-  vid.addEventListener('ended',()=>next(s));
+  vid.addEventListener('ended',()=>{if(s===current)next(s,true)});
   center.onclick=e=>{e.stopPropagation();if(vid.paused)vid.play();else{vid.pause()}};
 
   // Ketuk: tampilkan UI / jeda. Ketuk dua kali: suka.
@@ -416,7 +416,11 @@ function like(s,force,e){
     const r=s.getBoundingClientRect();b.style.left=(e?e.clientX-r.left:r.width/2)+'px';b.style.top=(e?e.clientY-r.top:r.height/2)+'px';
     s.appendChild(b);setTimeout(()=>b.remove(),800)}
 }
-function next(s){const n=s.nextElementSibling;if(n)n.scrollIntoView({behavior:'smooth'})}
+function next(s,auto){
+  const go=()=>{const n=s.nextElementSibling;if(n&&n.classList.contains('slide')){if(auto)toast('Memutar film berikutnya');n.scrollIntoView({behavior:'smooth'});return true}return false};
+  if(go())return;
+  loading=false;more().then(()=>{if(!go())setTimeout(go,1500)});
+}
 function calm(s){clearTimeout(s._c);s._c=setTimeout(()=>{if(!s._m.paused){s.classList.add('calm');if(s===current)document.body.classList.add('calm')}},2500)}
 function wake(s,auto=true){s.classList.remove('calm');document.body.classList.remove('calm');if(auto)calm(s)}
 
@@ -432,7 +436,7 @@ const observer=new IntersectionObserver(es=>es.forEach(e=>{
   if(e.isIntersecting&&e.intersectionRatio>.6){
     current=s;document.body.classList.toggle('calm',s.classList.contains('calm'));
     if(!vid.src){vid.src=vid.dataset.src;s.querySelector('.spin').hidden=false}
-    vid.play().catch(()=>{s.querySelector('.spin').hidden=true;s.querySelector('.center').hidden=false});
+    vid.play().catch(()=>{vid.muted=true;vid.play().then(()=>toast('Ketuk ikon suara untuk menyalakan suara')).catch(()=>{s.querySelector('.spin').hidden=true;s.querySelector('.center').hidden=false})});
     seen.add(s.dataset.id);store.set('bf_seen',[...seen].slice(-600));
     if(!s.nextElementSibling||!s.nextElementSibling.nextElementSibling)more();
   }else if(!vid.paused)vid.pause();
