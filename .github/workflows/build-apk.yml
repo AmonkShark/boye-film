@@ -17,7 +17,7 @@ jobs:
         with: { name: BoyeFilm-apk, path: BoyeFilm.apk }
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: Boye Film v1.0.${{ github.run_number }}
+          tag_name: v2.0.${{ github.run_number }}
+          name: Boye Film v2.0.${{ github.run_number }}
           files: BoyeFilm.apk
           make_latest: true

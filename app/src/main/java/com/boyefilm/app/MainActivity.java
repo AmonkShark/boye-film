@@ -46,7 +46,8 @@ public class MainActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
-                return true; // blokir navigasi keluar
+                String h = r.getUrl().getHost();
+                return h == null || !h.endsWith("amonkshark.github.io"); // blokir navigasi keluar
             }
         });
 
@@ -75,7 +76,7 @@ public class MainActivity extends Activity {
         web.setWebChromeClient(chrome);
 
         if (b != null) web.restoreState(b);
-        else web.loadDataWithBaseURL("https://archive.org/", readAsset("index.html"), "text/html", "utf-8", null);
+        else web.loadUrl("https://amonkshark.github.io/boye-film/");
     }
 
     private String readAsset(String name) {

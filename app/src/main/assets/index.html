@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#06070a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Boye Film">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <title>Boye Film</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap">
@@ -71,6 +77,23 @@ button:focus-visible{outline:2px solid var(--heat);outline-offset:3px}
 .act.on span.ic{background:var(--grad);border-color:transparent}
 .act.on svg{fill:var(--fg)}
 
+/* YouTube + pengaturan */
+.yt{position:absolute;inset:0}.yt iframe{width:100%;height:100%;border:0}
+.shield{position:absolute;inset:0}
+.gear{border:1px solid var(--line);background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-radius:999px;padding:7px 13px;font:700 12px var(--body);letter-spacing:.08em;cursor:pointer;display:flex;gap:6px;align-items:center}
+.gear b{width:7px;height:7px;border-radius:50%;background:var(--hot);box-shadow:0 0 10px var(--hot)}
+#sheet{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center}
+#sheet .panel{width:100%;max-width:520px;background:#111318;border:1px solid var(--line);border-radius:22px 22px 0 0;padding:22px max(18px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:14px}
+.panel h3{margin:0;font:400 28px var(--display);letter-spacing:.02em}
+.opt{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--line);border-radius:14px;cursor:pointer}
+.opt.on{border-color:var(--hot);background:rgba(255,77,46,.10)}
+.opt strong{display:block;font-size:15px}.opt span{font-size:13px;color:var(--muted);line-height:1.45}
+.panel input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--line);background:#0a0b0f;color:var(--fg);font:500 14px var(--body)}
+.panel .hint{font-size:12.5px;color:var(--muted);line-height:1.5;margin:0}
+.panel .row{display:flex;gap:10px}
+.panel .row button{flex:1;padding:14px;border-radius:12px;border:0;font:800 14px var(--body);cursor:pointer}
+.btn-main{background:var(--grad);color:#160600}.btn-ghost{background:var(--glass);color:var(--fg)}
+
 /* Progress */
 .prog{position:absolute;left:0;right:0;bottom:env(safe-area-inset-bottom,0px);height:18px;display:flex;align-items:flex-end;cursor:pointer;touch-action:none}
 .prog .track{position:relative;width:100%;height:3px;background:rgba(255,255,255,.18);transition:height .2s}
@@ -117,12 +140,20 @@ body.calm .top{opacity:0;pointer-events:none}
 <div id="splash"><div class="logo">BOYE<b>FILM</b><small>Film aksi tanpa cari judul</small><div class="bar"><i></i></div></div></div>
 
 <div class="top" id="top">
-  <div class="brand"><h1>BOYE<span>FILM</span></h1><div class="live">PUTAR TERUS</div></div>
+  <div class="brand"><h1>BOYE<span>FILM</span></h1><button class="gear" id="gear" aria-label="Sumber film"><b></b><span id="srcLbl">SUMBER</span></button></div>
   <nav class="chips" id="chips"></nav>
 </div>
 
 <main id="feed"><div class="skel" id="skel"><i style="width:30%"></i><i style="width:75%;height:40px"></i><i style="width:55%"></i><i style="width:85%"></i></div></main>
 <div class="toast" id="toast"></div>
+<div id="sheet" hidden><div class="panel" role="dialog" aria-label="Sumber film">
+  <h3>SUMBER FILM</h3>
+  <div class="opt" data-src="yt"><div><strong>YouTube · film baru</strong><span>Film lengkap terbaru dari YouTube, diputar di dalam aplikasi. Perlu YouTube API key gratis.</span></div></div>
+  <div class="opt" data-src="arc"><div><strong>Arsip · film klasik</strong><span>Film lama domain publik dari Internet Archive. Tanpa pengaturan.</span></div></div>
+  <input id="ytkey" type="text" autocomplete="off" spellcheck="false" placeholder="Tempel YouTube API key di sini">
+  <p class="hint">Kunci hanya disimpan di HP ini. Durasi minimal 45 menit, dirilis 2015 ke atas.</p>
+  <div class="row"><button class="btn-ghost" id="sheetCancel">Batal</button><button class="btn-main" id="sheetSave">Simpan</button></div>
+</div></div>
 
 <script>
 const IC={
@@ -146,27 +177,84 @@ const $=s=>document.querySelector(s);
 const feed=$('#feed');
 const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(_){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(_){}}};
 const seen=new Set(store.get('bf_seen',[])),liked=new Set(store.get('bf_liked',[]));
-let genre=0,queue=[],page=1,loading=false,muted=false,current=null,token=0;
+let genre=0,queue=[],page=1,ytPage='',loading=false,muted=false,current=null,token=0;
+let SRC=store.get('bf_src',''),KEY=store.get('bf_key','');
+if(SRC==='yt'&&!KEY)SRC='arc';if(!SRC)SRC=KEY?'yt':'arc';
+const YTQ=[
+  ['action full movie','martial arts action full movie','war action full movie','fantasy action full movie'],
+  ['kung fu full movie','martial arts full movie english'],
+  ['war movie full movie','military action full movie'],
+  ['fantasy action full movie','fantasy adventure full movie'],
+  ['epic sword battle full movie','warrior epic full movie'],
+  ['western full movie','cowboy action full movie']
+];
+
+/* Pemutar YouTube dengan antarmuka mirip <video> */
+let ytReadyP=null;
+function ytReady(){if(ytReadyP)return ytReadyP;ytReadyP=new Promise(r=>{window.onYouTubeIframeAPIReady=r;const t=document.createElement('script');t.src='https://www.youtube.com/iframe_api';document.head.appendChild(t)});return ytReadyP}
+class YTMedia extends EventTarget{
+  constructor(el,id){super();this.el=el;this.id=id;this.p=null;this.paused=true;this._m=muted;this.duration=0;this.dataset={};this.want=false}
+  get src(){return this.p?this.id:''}
+  set src(_){if(this.p)return;this.p=1;ytReady().then(()=>{
+    const d=document.createElement('div');this.el.appendChild(d);
+    this.p=new YT.Player(d,{videoId:this.id,playerVars:{playsinline:1,controls:0,rel:0,modestbranding:1,fs:0,iv_load_policy:3,disablekb:1,origin:location.origin},
+      events:{onReady:()=>{this.ok=true;this.duration=this.p.getDuration();this._m?this.p.mute():this.p.unMute();if(this.want)this.p.playVideo()},
+        onStateChange:e=>{const S=YT.PlayerState;
+          if(e.data===S.PLAYING){this.paused=false;this.duration=this.p.getDuration();this.emit('playing');this.tick()}
+          else if(e.data===S.PAUSED){this.paused=true;this.emit('pause')}
+          else if(e.data===S.BUFFERING)this.emit('waiting');
+          else if(e.data===S.ENDED){this.paused=true;this.emit('ended')}},
+        onError:()=>this.emit('ended')}})})}
+  emit(n){this.dispatchEvent(new Event(n))}
+  tick(){clearInterval(this.t);this.t=setInterval(()=>{if(this.paused)return clearInterval(this.t);this.emit('timeupdate')},500)}
+  play(){this.want=true;if(this.ok)this.p.playVideo();return Promise.resolve()}
+  pause(){this.want=false;if(this.ok){this.p.pauseVideo();this.paused=true}}
+  get currentTime(){return this.ok?this.p.getCurrentTime():0}
+  set currentTime(v){if(this.ok)this.p.seekTo(v,true)}
+  get muted(){return this._m}
+  set muted(v){this._m=v;if(this.ok)v?this.p.mute():this.p.unMute()}
+  destroy(){clearInterval(this.t);try{this.p&&this.p.destroy&&this.p.destroy()}catch(_){}}
+}
+
+/* Sumber film */
+function srcLabel(){$('#srcLbl').textContent=SRC==='yt'?'YOUTUBE':'KLASIK'}
+srcLabel();
+let pick=SRC;
+function openSheet(){pick=SRC;$('#ytkey').value=KEY;markOpt();$('#sheet').hidden=false}
+function markOpt(){document.querySelectorAll('.opt').forEach(o=>o.classList.toggle('on',o.dataset.src===pick));$('#ytkey').hidden=pick!=='yt'}
+document.querySelectorAll('.opt').forEach(o=>o.onclick=()=>{pick=o.dataset.src;markOpt()});
+$('#gear').onclick=openSheet;
+$('#sheetCancel').onclick=()=>$('#sheet').hidden=true;
+$('#sheet').onclick=e=>{if(e.target.id==='sheet')$('#sheet').hidden=true};
+$('#sheetSave').onclick=()=>{
+  const k=$('#ytkey').value.trim();
+  if(pick==='yt'&&!k){toast('Tempel API key dulu');return}
+  KEY=k;store.set('bf_key',KEY);SRC=pick;store.set('bf_src',SRC);srcLabel();$('#sheet').hidden=true;reset();
+};
 
 /* Chips */
 GENRES.forEach(([n],i)=>{const b=document.createElement('button');b.className='chip'+(i?'':' on');b.textContent=n;b.onclick=()=>setGenre(i,b);$('#chips').appendChild(b)});
 function setGenre(i,b){
-  if(i===genre)return;genre=i;document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));
-  token++;queue=[];page=1+Math.floor(Math.random()*3);loading=false;
-  feed.querySelectorAll('video').forEach(v=>{v.pause();v.removeAttribute('src');v.load()});
-  feed.innerHTML=$('#skel')?.outerHTML||'<div class="skel" id="skel"><i style="width:40%"></i><i style="width:80%;height:40px"></i></div>';
+  if(i===genre)return;genre=i;document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));reset();
+}
+function reset(){
+  token++;queue=[];page=1+Math.floor(Math.random()*3);ytPage='';loading=false;
+  feed.querySelectorAll('.slide').forEach(x=>{const m=x._m;if(m.destroy)m.destroy();else{m.pause();m.removeAttribute('src');m.load()}});
+  feed.innerHTML='<div class="skel" id="skel"><i style="width:30%"></i><i style="width:75%;height:40px"></i><i style="width:55%"></i><i style="width:85%"></i></div>';
   more();
 }
-function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),1400)}
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),1600)}
 
-/* Data */
-async function fetchBatch(){
+/* Data: Arsip */
+async function fetchArc(){
   const q='collection:(feature_films) AND mediatype:(movies) AND '+GENRES[genre][1]+' AND NOT subject:(documentary OR documentaries OR training OR newsreel OR propaganda OR educational OR holocaust OR "concentration camp")';
   const url='https://archive.org/advancedsearch.php?q='+encodeURIComponent(q)+'&fl[]=identifier&fl[]=title&fl[]=year&fl[]=description&fl[]=subject&rows=24&page='+(page++)+'&output=json&sort[]=downloads+desc';
   const j=await (await fetch(url)).json();
-  return j.response.docs.filter(d=>!seen.has(d.identifier)&&!/documentar|training|marksmanship|newsreel|concentration camp|instruction/i.test(clean(d.title)+' '+[].concat(d.subject||[]).join(' '))).sort(()=>Math.random()-.5);
+  return j.response.docs.filter(d=>!seen.has(d.identifier)&&!/documentar|training|marksmanship|newsreel|concentration camp|instruction/i.test(clean(d.title)+' '+[].concat(d.subject||[]).join(' ')))
+    .map(d=>({id:d.identifier,title:d.title,year:d.year,desc:d.description,subs:[].concat(d.subject||[]).join(' '),img:'https://archive.org/services/img/'+d.identifier,arc:1}))
+    .sort(()=>Math.random()-.5);
 }
-async function videoFor(id){
+async function arcVideo(id){
   const j=await (await fetch('https://archive.org/metadata/'+id)).json();
   const files=(j.files||[]).filter(f=>/\.mp4$/i.test(f.name));
   if(!files.length)return null;
@@ -175,22 +263,42 @@ async function videoFor(id){
   if(len&&len<45*60)return null;
   return{src:'https://archive.org/download/'+id+'/'+encodeURIComponent(f.name),len};
 }
+/* Data: YouTube */
+const isoDur=d=>{const m=/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/.exec(d||'')||[];return(+m[1]||0)*3600+(+m[2]||0)*60+(+m[3]||0)};
+async function fetchYT(){
+  const qs=YTQ[genre],q=qs[Math.floor(Math.random()*qs.length)];
+  const u='https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoDuration=long&videoEmbeddable=true&safeSearch=moderate&maxResults=25&order=relevance&publishedAfter=2015-01-01T00:00:00Z&q='+encodeURIComponent(q)+(ytPage?'&pageToken='+ytPage:'')+'&key='+encodeURIComponent(KEY);
+  const j=await (await fetch(u)).json();
+  if(j.error){const m=j.error.message||'';throw new Error(/quota/i.test(m)?'Kuota YouTube hari ini habis. Coba lagi besok atau pakai sumber Klasik.':/key/i.test(m)?'API key YouTube tidak valid. Periksa lagi di menu Sumber.':'YouTube menolak permintaan: '+m)}
+  ytPage=j.nextPageToken||'';
+  const items=(j.items||[]).filter(i=>i.id&&i.id.videoId&&!seen.has(i.id.videoId));
+  if(!items.length)return[];
+  const ids=items.map(i=>i.id.videoId).join(',');
+  const d=await (await fetch('https://www.googleapis.com/youtube/v3/videos?part=contentDetails,status&id='+ids+'&key='+encodeURIComponent(KEY))).json();
+  const len={};(d.items||[]).forEach(v=>{if(v.status&&v.status.embeddable!==false)len[v.id]=isoDur(v.contentDetails.duration)});
+  return items.filter(i=>len[i.id.videoId]>=45*60&&!/trailer|teaser|review|recap|explained|reaction|clip/i.test(i.snippet.title))
+    .map(i=>({id:i.id.videoId,title:i.snippet.title,year:(i.snippet.publishedAt||'').slice(0,4),desc:i.snippet.description,
+      subs:q+' '+i.snippet.title,img:(i.snippet.thumbnails.high||i.snippet.thumbnails.default).url,channel:i.snippet.channelTitle,yt:1,len:len[i.id.videoId]}))
+    .sort(()=>Math.random()-.5);
+}
+const fetchBatch=()=>SRC==='yt'?fetchYT():fetchArc();
+const videoFor=doc=>doc.yt?Promise.resolve({yt:doc.id,len:doc.len}):arcVideo(doc.id);
+
 const clean=t=>{const d=document.createElement('div');d.innerHTML=Array.isArray(t)?t[0]:(t||'');return d.textContent.replace(/\s+/g,' ').trim()};
 const fmt=s=>{s=Math.max(0,Math.floor(s||0));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0')};
 const dur=s=>{const h=Math.floor(s/3600),m=Math.round(s%3600/60);return(h?h+'j ':'')+m+'m'};
 
 /* Slide */
 function makeSlide(doc,v){
-  const s=document.createElement('section');s.className='slide';s.dataset.id=doc.identifier;
-  const img='https://archive.org/services/img/'+doc.identifier;
-  const subs=[].concat(doc.subject||[]).join(' ');
-  const lbl=/martial|kung|karate|ninja|samurai/i.test(subs)?'Kungfu':/fantasy|sorcery|sinbad|myth/i.test(subs)?'Fantasi':/sandal|peplum|hercules|gladiator|swashbuck/i.test(subs)?'Legenda':/war|combat/i.test(subs)?'Perang':/western/i.test(subs)?'Koboi':'Aksi';
-  const isLiked=liked.has(doc.identifier);
-  s.innerHTML=`<div class="backdrop" style="background-image:url('${img}')"></div>
-  <video playsinline preload="none" poster="${img}"></video><div class="vignette"></div>
+  const s=document.createElement('section');s.className='slide';s.dataset.id=doc.id;
+  const subs=doc.subs||'';
+  const lbl=/martial|kung|karate|ninja|samurai/i.test(subs)?'Kungfu':/fantasy|sorcery|sinbad|myth/i.test(subs)?'Fantasi':/sandal|peplum|hercules|gladiator|swashbuck|sword|warrior/i.test(subs)?'Legenda':/war|combat|military/i.test(subs)?'Perang':/western|cowboy/i.test(subs)?'Koboi':'Aksi';
+  const isLiked=liked.has(doc.id);
+  s.innerHTML=`<div class="backdrop"></div>
+  ${v.yt?'<div class="yt"></div><div class="shield"></div>':'<video playsinline preload="none"></video>'}<div class="vignette"></div>
   <div class="spin" hidden></div><button class="center" hidden aria-label="Putar">${IC.play}</button>
-  <div class="info"><div class="badges"><span class="badge hot">${lbl}</span><span class="badge">Full Movie</span></div>
-    <h2></h2><div class="meta"><span>${doc.year||'Klasik'}</span>${v.len?'<i></i><span>'+dur(v.len)+'</span>':''}<i></i><span>Gratis</span></div>
+  <div class="info"><div class="badges"><span class="badge hot">${lbl}</span><span class="badge">${v.yt?'YouTube':'Klasik'}</span></div>
+    <h2></h2><div class="meta"><span>${clean(doc.year)||'Klasik'}</span>${v.len?'<i></i><span>'+dur(v.len)+'</span>':''}<i></i><span class="ch">Gratis</span></div>
     <p class="desc"></p></div>
   <div class="rail">
     <button class="act like${isLiked?' on':''}" aria-label="Suka"><span class="ic">${IC.heart}</span><small>Suka</small></button>
@@ -201,15 +309,20 @@ function makeSlide(doc,v){
   </div>
   <div class="time">0:00 / ${v.len?fmt(v.len):'--'}</div>
   <div class="prog"><div class="track"><div class="fill"></div></div></div>`;
+  s.querySelector('.backdrop').style.backgroundImage='url("'+doc.img+'")';
+  if(doc.channel)s.querySelector('.ch').textContent=doc.channel;
   s.querySelector('h2').textContent=clean(doc.title);
-  const desc=s.querySelector('.desc');desc.textContent=clean(doc.description).slice(0,600)||'Film aksi klasik lengkap dari arsip domain publik.';
+  const desc=s.querySelector('.desc');desc.textContent=clean(doc.desc).slice(0,600)||'Film aksi lengkap, gratis.';
   desc.onclick=e=>{e.stopPropagation();desc.classList.toggle('open')};
 
-  const vid=s.querySelector('video'),center=s.querySelector('.center'),spin=s.querySelector('.spin'),fill=s.querySelector('.fill'),time=s.querySelector('.time');
-  vid.dataset.src=v.src;vid.muted=muted;
+  let vid;
+  if(v.yt){vid=new YTMedia(s.querySelector('.yt'),v.yt)}
+  else{vid=s.querySelector('video');vid.poster=doc.img;vid.dataset.src=v.src;vid.muted=muted}
+  s._m=vid;
+  const center=s.querySelector('.center'),spin=s.querySelector('.spin'),fill=s.querySelector('.fill'),time=s.querySelector('.time');
   vid.addEventListener('waiting',()=>spin.hidden=false);
   vid.addEventListener('playing',()=>{spin.hidden=true;center.hidden=true;calm(s)});
-  vid.addEventListener('pause',()=>{center.hidden=false;wake(s,false)});
+  vid.addEventListener('pause',()=>{center.hidden=false;spin.hidden=true;wake(s,false)});
   vid.addEventListener('timeupdate',()=>{const d=vid.duration||v.len;fill.style.width=(vid.currentTime/d*100)+'%';time.textContent=fmt(vid.currentTime)+' / '+fmt(d)});
   vid.addEventListener('ended',()=>next(s));
   center.onclick=e=>{e.stopPropagation();vid.play()};
@@ -224,9 +337,9 @@ function makeSlide(doc,v){
     last=now;
   });
   s.querySelector('.like').onclick=e=>{e.stopPropagation();like(s)};
-  s.querySelector('.snd').onclick=e=>{e.stopPropagation();muted=!muted;document.querySelectorAll('video').forEach(x=>x.muted=muted);document.querySelectorAll('.snd .ic').forEach(i=>i.innerHTML=muted?IC.mute:IC.vol);toast(muted?'Suara mati':'Suara nyala')};
+  s.querySelector('.snd').onclick=e=>{e.stopPropagation();muted=!muted;feed.querySelectorAll('.slide').forEach(x=>x._m.muted=muted);document.querySelectorAll('.snd .ic').forEach(i=>i.innerHTML=muted?IC.mute:IC.vol);toast(muted?'Suara mati':'Suara nyala')};
   s.querySelector('.rot').onclick=e=>{e.stopPropagation();toggleOrientation()};
-  s.querySelector('.fs').onclick=e=>{e.stopPropagation();(vid.requestFullscreen||vid.webkitEnterFullscreen||(()=>{})).call(vid)};
+  s.querySelector('.fs').onclick=e=>{e.stopPropagation();const t=v.yt?s:vid;(t.requestFullscreen||t.webkitRequestFullscreen||t.webkitEnterFullscreen||(()=>toast('Miringkan HP untuk layar penuh'))).call(t)};
   s.querySelector('.nxt').onclick=e=>{e.stopPropagation();next(s)};
 
   // Geser progress
@@ -246,7 +359,7 @@ function like(s,force,e){
     s.appendChild(b);setTimeout(()=>b.remove(),800)}
 }
 function next(s){const n=s.nextElementSibling;if(n)n.scrollIntoView({behavior:'smooth'})}
-function calm(s){clearTimeout(s._c);s._c=setTimeout(()=>{const v=s.querySelector('video');if(!v.paused){s.classList.add('calm');if(s===current)document.body.classList.add('calm')}},3500)}
+function calm(s){clearTimeout(s._c);s._c=setTimeout(()=>{if(!s._m.paused){s.classList.add('calm');if(s===current)document.body.classList.add('calm')}},3500)}
 function wake(s,auto=true){s.classList.remove('calm');document.body.classList.remove('calm');if(auto)calm(s)}
 
 async function toggleOrientation(){
@@ -257,38 +370,41 @@ async function toggleOrientation(){
 addEventListener('resize',()=>{if(current)current.scrollIntoView({block:'start'})});
 
 const observer=new IntersectionObserver(es=>es.forEach(e=>{
-  const s=e.target,vid=s.querySelector('video');
+  const s=e.target,vid=s._m;
   if(e.isIntersecting&&e.intersectionRatio>.6){
     current=s;document.body.classList.toggle('calm',s.classList.contains('calm'));
     if(!vid.src){vid.src=vid.dataset.src;s.querySelector('.spin').hidden=false}
     vid.play().catch(()=>{s.querySelector('.spin').hidden=true;s.querySelector('.center').hidden=false});
-    seen.add(s.dataset.id);store.set('bf_seen',[...seen].slice(-400));
+    seen.add(s.dataset.id);store.set('bf_seen',[...seen].slice(-600));
     if(!s.nextElementSibling||!s.nextElementSibling.nextElementSibling)more();
   }else if(!vid.paused)vid.pause();
 }),{threshold:[0,.6]});
 
+function emptyMsg(t){$('#splash').classList.add('gone');feed.innerHTML='<div class="skel" style="justify-content:center;align-items:center;color:var(--muted);text-align:center;line-height:1.5"></div>';feed.firstChild.textContent=t}
 async function more(){
   if(loading)return;loading=true;const my=token;
   try{
-    let added=0,tries=0;
+    let added=0,tries=0,batches=0;
     while(added<3&&tries<40){
       tries++;
-      if(!queue.length)queue=await fetchBatch();
+      if(!queue.length){if(++batches>4)break;queue=await fetchBatch()}
       if(my!==token)return;
-      if(!queue.length)break;
+      if(!queue.length)continue;
       const doc=queue.shift();
-      const v=await videoFor(doc.identifier).catch(()=>null);
+      const v=await videoFor(doc).catch(()=>null);
       if(my!==token)return;
       if(!v)continue;
       $('#skel')?.remove();feed.appendChild(makeSlide(doc,v));added++;
       $('#splash').classList.add('gone');
     }
-    if(!feed.querySelector('.slide')){$('#splash').classList.add('gone');feed.innerHTML='<div class="skel" style="justify-content:center;align-items:center;color:var(--muted)">Belum ada film untuk genre ini. Coba genre lain.</div>'}
+    if(!feed.querySelector('.slide'))emptyMsg('Belum ada film untuk genre ini. Coba genre lain.');
   }catch(e){
     $('#splash').classList.add('gone');
-    if(!feed.querySelector('.slide'))feed.innerHTML='<div class="skel" style="justify-content:center;align-items:center;color:var(--muted);text-align:center">Tidak bisa memuat film. Periksa koneksi internet lalu buka ulang aplikasi.</div>';
+    if(!feed.querySelector('.slide'))emptyMsg(e&&e.message&&!/fetch/i.test(e.message)?e.message:'Tidak bisa memuat film. Periksa koneksi internet lalu buka ulang aplikasi.');
+    else toast(e.message||'Gagal memuat');
   }finally{if(my===token)loading=false}
 }
+if(SRC==='arc'&&!store.get('bf_asked',false)){store.set('bf_asked',true);setTimeout(openSheet,900)}
 more();
 </script>
 </body>
