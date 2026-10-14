@@ -205,7 +205,7 @@ class YTMedia extends EventTarget{
   set src(_){if(this.p)return;this.p=1;ytReady().then(()=>{
     const d=document.createElement('div');this.el.appendChild(d);
     this.p=new YT.Player(d,{videoId:this.id,playerVars:{playsinline:1,controls:0,rel:0,modestbranding:1,fs:0,iv_load_policy:3,disablekb:1,origin:location.origin},
-      events:{onReady:()=>{this.ok=true;this.duration=this.p.getDuration();this._m?this.p.mute():this.p.unMute();if(this.want)this.p.playVideo()},
+      events:{onReady:()=>{this.ok=true;this.duration=this.p.getDuration();this._m?this.p.mute():this.p.unMute();if(this.want){this.p.playVideo();this.ensure()}},
         onStateChange:e=>{const S=YT.PlayerState;
           if(e.data===S.PLAYING){this.paused=false;this.duration=this.p.getDuration();this.emit('playing');this.tick()}
           else if(e.data===S.PAUSED){this.paused=true;this.emit('pause')}
@@ -214,8 +214,12 @@ class YTMedia extends EventTarget{
         onError:()=>this.emit('ended')}})})}
   emit(n){this.dispatchEvent(new Event(n))}
   tick(){clearInterval(this.t);this.t=setInterval(()=>{if(this.paused)return clearInterval(this.t);this.emit('timeupdate')},500)}
-  play(){this.want=true;if(this.ok)this.p.playVideo();return Promise.resolve()}
-  pause(){this.want=false;if(this.ok){this.p.pauseVideo();this.paused=true}}
+  play(){this.want=true;if(this.ok){if(this._m!==muted&&!muted){this._m=false;this.p.unMute()}this.p.playVideo();this.ensure()}return Promise.resolve()}
+  // Jika browser menahan putar otomatis bersuara, putar tanpa suara agar film tetap jalan
+  ensure(){clearTimeout(this.e);this.e=setTimeout(()=>{if(!this.want||!this.ok)return;const st=this.p.getPlayerState();
+    if(st!==1&&st!==3){this.p.mute();this._m=true;this.p.playVideo();this.emit('automuted');
+      setTimeout(()=>{if(this.want&&this.p.getPlayerState()!==1&&this.p.getPlayerState()!==3)this.emit('pause')},1500)}},1300)}
+  pause(){this.want=false;clearTimeout(this.e);if(this.ok){this.p.pauseVideo();this.paused=true}}
   get currentTime(){return this.ok?this.p.getCurrentTime():0}
   set currentTime(v){if(this.ok)this.p.seekTo(v,true)}
   get muted(){return this._m}
@@ -380,6 +384,7 @@ function makeSlide(doc,v){
   vid.addEventListener('playing',()=>{spin.hidden=true;setIcon(true);center.hidden=false;calm(s)});
   vid.addEventListener('pause',()=>{setIcon(false);center.hidden=false;spin.hidden=true;wake(s,false)});
   vid.addEventListener('timeupdate',()=>{const d=vid.duration||v.len;fill.style.width=(vid.currentTime/d*100)+'%';time.textContent=fmt(vid.currentTime)+' / '+fmt(d)});
+  vid.addEventListener('automuted',()=>{muted=true;document.querySelectorAll('.snd .ic').forEach(i=>i.innerHTML=IC.mute);if(!window.__mutedTip){window.__mutedTip=1;toast('Ketuk ikon suara untuk menyalakan suara')}});
   vid.addEventListener('ended',()=>{if(s===current)next(s,true)});
   center.onclick=e=>{e.stopPropagation();if(vid.paused)vid.play();else{vid.pause()}};
 
@@ -435,6 +440,7 @@ const observer=new IntersectionObserver(es=>es.forEach(e=>{
     current=s;document.body.classList.toggle('calm',s.classList.contains('calm'));
     if(!vid.src){vid.src=vid.dataset.src;s.querySelector('.spin').hidden=false}
     vid.play().catch(()=>{vid.muted=true;vid.play().then(()=>toast('Ketuk ikon suara untuk menyalakan suara')).catch(()=>{s.querySelector('.spin').hidden=true;s.querySelector('.center').hidden=false})});
+    const nx=s.nextElementSibling;if(nx&&nx._m&&!nx._m.src)nx._m.src=nx._m.dataset.src;
     seen.add(s.dataset.id);store.set('bf_seen',[...seen].slice(-600));
     if(!s.nextElementSibling||!s.nextElementSibling.nextElementSibling)more();
   }else if(!vid.paused)vid.pause();
