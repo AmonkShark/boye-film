@@ -148,6 +148,8 @@ body.calm .top{opacity:0;pointer-events:none}
 <div class="toast" id="toast"></div>
 <div id="sheet" hidden><div class="panel" role="dialog" aria-label="Sumber film">
   <h3>SUMBER FILM</h3>
+  <div class="opt" data-src="mix"><div><strong>Campuran · film baru</strong><span>YouTube dan Dailymotion digabung. Pilihan paling banyak.</span></div></div>
+  <div class="opt" data-src="dm"><div><strong>Dailymotion · film baru</strong><span>Film lengkap dari Dailymotion, diputar di dalam aplikasi. Tanpa kuota.</span></div></div>
   <div class="opt" data-src="yt"><div><strong>YouTube · film baru</strong><span>Film lengkap terbaru dari YouTube, diputar di dalam aplikasi. Siap dipakai, tanpa pengaturan.</span></div></div>
   <div class="opt" data-src="arc"><div><strong>Arsip · film klasik</strong><span>Film lama domain publik dari Internet Archive. Tanpa pengaturan.</span></div></div>
   <input id="ytkey" type="text" autocomplete="off" spellcheck="false" placeholder="API key sendiri (opsional)">
@@ -180,7 +182,7 @@ const seen=new Set(store.get('bf_seen',[])),liked=new Set(store.get('bf_liked',[
 let genre=0,queue=[],page=1,ytPage='',loading=false,muted=false,current=null,token=0;
 // Kunci bawaan Boye Film: dibatasi ke YouTube Data API dan situs amonkshark.github.io
 const BUILTIN_KEY='AIzaSyAzN91o1a2kOeZUNLOAGv4SSWxV11gon1k';
-let SRC=store.get('bf_src','yt'),KEY=store.get('bf_key','')||BUILTIN_KEY;
+let SRC=store.get('bf_src','mix'),KEY=store.get('bf_key','')||BUILTIN_KEY;
 const YTQ=[
   ['action full movie','martial arts action full movie','war action full movie','fantasy action full movie'],
   ['kung fu full movie','martial arts full movie english'],
@@ -217,12 +219,41 @@ class YTMedia extends EventTarget{
   destroy(){clearInterval(this.t);try{this.p&&this.p.destroy&&this.p.destroy()}catch(_){}}
 }
 
+/* Pemutar Dailymotion (iframe + postMessage) */
+class DMMedia extends EventTarget{
+  constructor(el,id){super();this.el=el;this.id=id;this.f=null;this.paused=true;this._m=muted;this.duration=0;this.t=0;this.dataset={};this.want=false;
+    this.on=e=>{if(!this.f||e.source!==this.f.contentWindow)return;let d=e.data;if(typeof d!=='string')return;const q=new URLSearchParams(d),ev=q.get('event');
+      if(ev==='apiready'){this.ok=true;this.send(this._m?'muted':'muted',this._m?'true':'false');if(this.want)this.send('play')}
+      else if(ev==='playing'||ev==='play'){this.paused=false;this.emit('playing')}
+      else if(ev==='pause'){this.paused=true;this.emit('pause')}
+      else if(ev==='waiting'){this.emit('waiting')}
+      else if(ev==='timeupdate'){this.t=+q.get('time')||0;this.emit('timeupdate')}
+      else if(ev==='durationchange'){this.duration=+q.get('duration')||this.duration}
+      else if(ev==='end'||ev==='video_end'){this.paused=true;this.emit('ended')}
+      else if(ev==='error'){this.emit('ended')}};
+    addEventListener('message',this.on)}
+  get src(){return this.f?this.id:''}
+  set src(_){if(this.f)return;const f=document.createElement('iframe');this.f=f;
+    f.allow='autoplay; fullscreen; picture-in-picture';
+    f.src='https://www.dailymotion.com/embed/video/'+this.id+'?api=postMessage&autoplay=1&controls=0&ui-logo=0&ui-start-screen-info=0&sharing-enable=0&queue-enable=0&queue-autoplay-next=0&mute='+(this._m?1:0)+'&origin='+encodeURIComponent(location.origin)+'&id=dm'+this.id;
+    this.el.appendChild(f)}
+  emit(n){this.dispatchEvent(new Event(n))}
+  send(c,v){try{this.f.contentWindow.postMessage(v===undefined?c:c+'='+v,'*');this.f.contentWindow.postMessage(JSON.stringify({command:c,parameters:v===undefined?[]:[v]}),'*')}catch(_){}}
+  play(){this.want=true;if(this.f)this.send('play');return Promise.resolve()}
+  pause(){this.want=false;if(this.f){this.send('pause');this.paused=true}}
+  get currentTime(){return this.t}
+  set currentTime(v){this.t=v;this.send('seek',v)}
+  get muted(){return this._m}
+  set muted(v){this._m=v;this.send('muted',v?'true':'false')}
+  destroy(){removeEventListener('message',this.on);if(this.f)this.f.remove()}
+}
+
 /* Sumber film */
-function srcLabel(){$('#srcLbl').textContent=SRC==='yt'?'YOUTUBE':'KLASIK'}
+function srcLabel(){$('#srcLbl').textContent={yt:'YOUTUBE',dm:'DAILYMOTION',mix:'CAMPURAN',arc:'KLASIK'}[SRC]||'SUMBER'}
 srcLabel();
 let pick=SRC;
 function openSheet(){pick=SRC;$('#ytkey').value=KEY;markOpt();$('#sheet').hidden=false}
-function markOpt(){document.querySelectorAll('.opt').forEach(o=>o.classList.toggle('on',o.dataset.src===pick));$('#ytkey').hidden=pick!=='yt'}
+function markOpt(){document.querySelectorAll('.opt').forEach(o=>o.classList.toggle('on',o.dataset.src===pick));$('#ytkey').hidden=!(pick==='yt'||pick==='mix')}
 document.querySelectorAll('.opt').forEach(o=>o.onclick=()=>{pick=o.dataset.src;markOpt()});
 $('#gear').onclick=openSheet;
 $('#sheetCancel').onclick=()=>$('#sheet').hidden=true;
@@ -238,7 +269,7 @@ function setGenre(i,b){
   if(i===genre)return;genre=i;document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));reset();
 }
 function reset(){
-  token++;queue=[];page=1+Math.floor(Math.random()*3);ytPage='';loading=false;
+  token++;queue=[];page=1+Math.floor(Math.random()*3);ytPage='';dmPage=1;loading=false;
   feed.querySelectorAll('.slide').forEach(x=>{const m=x._m;if(m.destroy)m.destroy();else{m.pause();m.removeAttribute('src');m.load()}});
   feed.innerHTML='<div class="skel" id="skel"><i style="width:30%"></i><i style="width:75%;height:40px"></i><i style="width:55%"></i><i style="width:85%"></i></div>';
   more();
@@ -281,8 +312,27 @@ async function fetchYT(){
       subs:q+' '+i.snippet.title,img:(i.snippet.thumbnails.high||i.snippet.thumbnails.default).url,channel:i.snippet.channelTitle,yt:1,len:len[i.id.videoId]}))
     .sort(()=>Math.random()-.5);
 }
-const fetchBatch=()=>SRC==='yt'?fetchYT():fetchArc();
-const videoFor=doc=>doc.yt?Promise.resolve({yt:doc.id,len:doc.len}):arcVideo(doc.id);
+let dmPage=1,mixTurn=0;
+async function fetchDM(){
+  const qs=YTQ[genre],q=qs[Math.floor(Math.random()*qs.length)];
+  const u='https://api.dailymotion.com/videos?fields=id,title,description,duration,thumbnail_720_url,created_time,owner.screenname,allow_embed&longer_than=45&limit=30&sort=relevance&family_filter=true&created_after='+Math.floor(Date.UTC(2015,0,1)/1000)+'&search='+encodeURIComponent(q)+'&page='+(dmPage++);
+  const j=await (await fetch(u)).json();
+  if(j.error)throw new Error('Dailymotion menolak permintaan.');
+  if(!j.has_more)dmPage=1;
+  return (j.list||[]).filter(v=>v.allow_embed!==false&&!seen.has('dm'+v.id)&&!/trailer|teaser|review|recap|explained|reaction|clip/i.test(v.title))
+    .map(v=>({id:'dm'+v.id,vid:v.id,title:v.title,year:new Date(v.created_time*1000).getFullYear()+'',desc:v.description,subs:q+' '+v.title,img:v.thumbnail_720_url,channel:v['owner.screenname'],dm:1,len:v.duration}))
+    .sort(()=>Math.random()-.5);
+}
+async function fetchMix(){
+  const order=(mixTurn++%2)?[fetchDM,fetchYT]:[fetchYT,fetchDM];
+  const out=[];
+  for(const f of order){try{out.push(...await f())}catch(e){if(f===fetchYT&&/Kuota|key/.test(e.message))continue;}}
+  // selang-seling sumber
+  const a=out.filter(x=>x.yt),b=out.filter(x=>x.dm),r=[];while(a.length||b.length){if(a.length)r.push(a.shift());if(b.length)r.push(b.shift())}
+  return r;
+}
+const fetchBatch=()=>SRC==='yt'?fetchYT():SRC==='dm'?fetchDM():SRC==='mix'?fetchMix():fetchArc();
+const videoFor=doc=>doc.yt?Promise.resolve({yt:doc.id,len:doc.len}):doc.dm?Promise.resolve({dm:doc.vid,len:doc.len}):arcVideo(doc.id);
 
 const clean=t=>{const d=document.createElement('div');d.innerHTML=Array.isArray(t)?t[0]:(t||'');return d.textContent.replace(/\s+/g,' ').trim()};
 const fmt=s=>{s=Math.max(0,Math.floor(s||0));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0')};
@@ -295,9 +345,9 @@ function makeSlide(doc,v){
   const lbl=/martial|kung|karate|ninja|samurai/i.test(subs)?'Kungfu':/fantasy|sorcery|sinbad|myth/i.test(subs)?'Fantasi':/sandal|peplum|hercules|gladiator|swashbuck|sword|warrior/i.test(subs)?'Legenda':/war|combat|military/i.test(subs)?'Perang':/western|cowboy/i.test(subs)?'Koboi':'Aksi';
   const isLiked=liked.has(doc.id);
   s.innerHTML=`<div class="backdrop"></div>
-  ${v.yt?'<div class="yt"></div><div class="shield"></div>':'<video playsinline preload="none"></video>'}<div class="vignette"></div>
+  ${v.yt||v.dm?'<div class="yt"></div><div class="shield"></div>':'<video playsinline preload="none"></video>'}<div class="vignette"></div>
   <div class="spin" hidden></div><button class="center" hidden aria-label="Putar">${IC.play}</button>
-  <div class="info"><div class="badges"><span class="badge hot">${lbl}</span><span class="badge">${v.yt?'YouTube':'Klasik'}</span></div>
+  <div class="info"><div class="badges"><span class="badge hot">${lbl}</span><span class="badge">${v.yt?'YouTube':v.dm?'Dailymotion':'Klasik'}</span></div>
     <h2></h2><div class="meta"><span>${clean(doc.year)||'Klasik'}</span>${v.len?'<i></i><span>'+dur(v.len)+'</span>':''}<i></i><span class="ch">Gratis</span></div>
     <p class="desc"></p></div>
   <div class="rail">
@@ -317,6 +367,7 @@ function makeSlide(doc,v){
 
   let vid;
   if(v.yt){vid=new YTMedia(s.querySelector('.yt'),v.yt)}
+  else if(v.dm){vid=new DMMedia(s.querySelector('.yt'),v.dm)}
   else{vid=s.querySelector('video');vid.poster=doc.img;vid.dataset.src=v.src;vid.muted=muted}
   s._m=vid;
   const center=s.querySelector('.center'),spin=s.querySelector('.spin'),fill=s.querySelector('.fill'),time=s.querySelector('.time');
@@ -339,7 +390,7 @@ function makeSlide(doc,v){
   s.querySelector('.like').onclick=e=>{e.stopPropagation();like(s)};
   s.querySelector('.snd').onclick=e=>{e.stopPropagation();muted=!muted;feed.querySelectorAll('.slide').forEach(x=>x._m.muted=muted);document.querySelectorAll('.snd .ic').forEach(i=>i.innerHTML=muted?IC.mute:IC.vol);toast(muted?'Suara mati':'Suara nyala')};
   s.querySelector('.rot').onclick=e=>{e.stopPropagation();toggleOrientation()};
-  s.querySelector('.fs').onclick=e=>{e.stopPropagation();const t=v.yt?s:vid;(t.requestFullscreen||t.webkitRequestFullscreen||t.webkitEnterFullscreen||(()=>toast('Miringkan HP untuk layar penuh'))).call(t)};
+  s.querySelector('.fs').onclick=e=>{e.stopPropagation();const t=v.yt||v.dm?s:vid;(t.requestFullscreen||t.webkitRequestFullscreen||t.webkitEnterFullscreen||(()=>toast('Miringkan HP untuk layar penuh'))).call(t)};
   s.querySelector('.nxt').onclick=e=>{e.stopPropagation();next(s)};
 
   // Geser progress
