@@ -135,9 +135,12 @@ const IC={
   play:'<svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg>'
 };
 const GENRES=[
-  ['Untukmu','(subject:(action) OR subject:(adventure) OR subject:(western) OR subject:(martial arts) OR subject:(war) OR subject:(crime))'],
-  ['Koboi','subject:(western)'],['Perang','subject:(war)'],['Kungfu','(subject:(martial arts) OR subject:(kung fu))'],
-  ['Petualangan','subject:(adventure)'],['Kriminal','(subject:(crime) OR subject:(noir))'],['Laga','subject:(action)']
+  ['Untukmu','(subject:(martial arts) OR subject:(kung fu) OR subject:(karate) OR subject:(war) OR subject:(fantasy) OR subject:(sword and sandal) OR subject:(peplum) OR subject:(sword and sorcery) OR subject:(hercules) OR subject:(samurai))'],
+  ['Kungfu','(subject:(martial arts) OR subject:(kung fu) OR subject:(karate) OR subject:(ninja) OR subject:(samurai))'],
+  ['Perang','(subject:(war) OR subject:(world war) OR subject:(combat))'],
+  ['Fantasi','(subject:(fantasy) OR subject:(sword and sorcery) OR subject:(sinbad) OR subject:(mythology))'],
+  ['Pedang & Legenda','(subject:(sword and sandal) OR subject:(peplum) OR subject:(hercules) OR subject:(gladiator) OR subject:(swashbuckler))'],
+  ['Koboi','subject:(western)']
 ];
 const $=s=>document.querySelector(s);
 const feed=$('#feed');
@@ -180,8 +183,8 @@ const dur=s=>{const h=Math.floor(s/3600),m=Math.round(s%3600/60);return(h?h+'j '
 function makeSlide(doc,v){
   const s=document.createElement('section');s.className='slide';s.dataset.id=doc.identifier;
   const img='https://archive.org/services/img/'+doc.identifier;
-  const sub=[].concat(doc.subject||[]).map(String).find(x=>/western|war|martial|kung|adventure|crime|noir|action/i.test(x));
-  const lbl=sub?({western:'Koboi',war:'Perang',martial:'Kungfu',kung:'Kungfu',adventure:'Petualangan',crime:'Kriminal',noir:'Kriminal',action:'Laga'})[Object.keys({western:1,war:1,martial:1,kung:1,adventure:1,crime:1,noir:1,action:1}).find(k=>new RegExp(k,'i').test(sub))]:'Laga';
+  const subs=[].concat(doc.subject||[]).join(' ');
+  const lbl=/martial|kung|karate|ninja|samurai/i.test(subs)?'Kungfu':/fantasy|sorcery|sinbad|myth/i.test(subs)?'Fantasi':/sandal|peplum|hercules|gladiator|swashbuck/i.test(subs)?'Legenda':/war|combat/i.test(subs)?'Perang':/western/i.test(subs)?'Koboi':'Aksi';
   const isLiked=liked.has(doc.identifier);
   s.innerHTML=`<div class="backdrop" style="background-image:url('${img}')"></div>
   <video playsinline preload="none" poster="${img}"></video><div class="vignette"></div>
