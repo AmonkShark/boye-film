@@ -13,11 +13,16 @@ jobs:
         with: { gradle-version: '8.7' }
       - run: gradle :app:assembleRelease --no-daemon
       - run: cp app/build/outputs/apk/release/*.apk BoyeFilm.apk
+      - name: Periksa APK
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          $BT/apksigner verify --verbose BoyeFilm.apk
+          $BT/aapt dump badging BoyeFilm.apk | head -5
       - uses: actions/upload-artifact@v4
         with: { name: BoyeFilm-apk, path: BoyeFilm.apk }
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.0.${{ github.run_number }}
-          name: Boye Film v2.0.${{ github.run_number }}
+          tag_name: v2.1.${{ github.run_number }}
+          name: Boye Film v2.1.${{ github.run_number }}
           files: BoyeFilm.apk
           make_latest: true
