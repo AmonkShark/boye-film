@@ -13,9 +13,9 @@ android {
     signingConfigs {
         boye {
             storeFile file('boyefilm.jks')
-            storePassword 'boyefilm123'
+            storePassword System.getenv('KEYSTORE_PASSWORD')
             keyAlias 'boyefilm'
-            keyPassword 'boyefilm123'
+            keyPassword System.getenv('KEY_PASSWORD')
             enableV1Signing true
             enableV2Signing true
         }
